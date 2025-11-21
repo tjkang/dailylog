@@ -141,9 +141,10 @@
             activityInput.value = ""; 
 
             const finalWebhookUrl = `${N8N_PLAN_QUERY_URL}?secret=${secretKey}`;
+            const timezoneOffset = "%2B09:00";
         
             try {
-                const queryUrl = `${finalWebhookUrl}&startTime=${date}T${startTime}:00+09:00&endTime=${date}T${endTime}:00+09:00`;
+                const queryUrl = `${finalWebhookUrl}&startTime=${date}T${startTime}:00${timezoneOffset}&endTime=${date}T${endTime}:00${timezoneOffset}`;
                 
                 const response = await fetch(queryUrl, { method: 'GET' });
                 
