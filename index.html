@@ -121,12 +121,51 @@
         // Secret Key는 URL에서 가져옵니다.
         // ==========================================
         const N8N_WEBHOOK_BASE_URL = "https://n8n.findwaylab.com/webhook/time-logger";
+        const N8N_PLAN_QUERY_URL = "https://n8n.findwaylab.com/webhook/get-plan";
     
         // ------------------------------------------
         // URL에서 Secret Key 추출
         // ------------------------------------------
         const urlParams = new URLSearchParams(window.location.search);
         const secretKey = urlParams.get('secret');
+
+        // ==========================================
+        // 0. 캘린더 계획을 조회하여 입력 필드를 채우는 함수
+        // ==========================================
+        async function fetchAndPopulateActivity(date, startTime, endTime) {
+            const activityInput = document.getElementById('activity');
+            if (!activityInput) return;
+            
+            // 로딩 상태 표시
+            activityInput.placeholder = "캘린더 일정을 조회 중...";
+            activityInput.value = ""; 
+
+            const finalWebhookUrl = `${N8N_PLAN_QUERY_URL}?secret=${secretKey}`;
+        
+            try {
+                const queryUrl = `${finalWebhookUrl}&startTime=${date}T${startTime}:00+09:00&endTime=${date}T${endTime}:00+09:00`;
+                
+                const response = await fetch(queryUrl, { method: 'GET' });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const activity = data.activity || ""; // Code 노드에서 반환된 'activity'
+                
+                if (activity) {
+                    activityInput.value = activity;
+                    activityInput.placeholder = "예: n8n 워크플로우 테스트, 독서, 회의";
+                } else {
+                    activityInput.placeholder = "캘린더에 일정이 없습니다. 직접 기입해 주세요.";
+                }
+        
+            } catch (error) {
+                console.error("캘린더 조회 오류:", error);
+                activityInput.placeholder = "캘린더 조회 실패. 직접 기입해 주세요.";
+            }
+        }
 
         // ==========================================
         // 1. 드롭다운 옵션 생성 및 초기화 로직
@@ -210,6 +249,24 @@
                 // 만약 자동 계산된 값이 옵션에 없다면(예: 오류) 기본값 유지
                 if(!startTimeSelect.value) startTimeSelect.selectedIndex = 0;
                 if(!endTimeSelect.value) endTimeSelect.selectedIndex = 0;
+
+                // 초기값 설정 후 캘린더 계획 조회 (페이지 로드 시)
+                if (dateInput.value && startTimeSelect.value && endTimeSelect.value) {
+                    fetchAndPopulateActivity(dateInput.value, startTimeSelect.value, endTimeSelect.value);
+                }
+                
+                // 4) 시간 변경 시 이벤트 리스너 추가
+                startTimeSelect.addEventListener('change', () => {
+                    fetchAndPopulateActivity(dateInput.value, startTimeSelect.value, endTimeSelect.value);
+                });
+                
+                endTimeSelect.addEventListener('change', () => {
+                    fetchAndPopulateActivity(dateInput.value, startTimeSelect.value, endTimeSelect.value);
+                });
+                
+                dateInput.addEventListener('change', () => {
+                    fetchAndPopulateActivity(dateInput.value, startTimeSelect.value, endTimeSelect.value);
+                });
 
             } catch (error) {
                 console.error("초기화 중 오류 발생:", error);
