@@ -117,10 +117,16 @@
 
     <script>
         // ==========================================
-        // 설정: n8n Webhook URL을 여기에 입력하세요
+        // 설정: n8n Webhook 기본 URL
+        // Secret Key는 URL에서 가져옵니다.
         // ==========================================
-        const N8N_WEBHOOK_URL = "https://n8n.findwaylab.com/webhook/time-logger"; 
-
+        const N8N_WEBHOOK_BASE_URL = "https://n8n.findwaylab.com/webhook/time-logger";
+    
+        // ------------------------------------------
+        // URL에서 Secret Key 추출
+        // ------------------------------------------
+        const urlParams = new URLSearchParams(window.location.search);
+        const secretKey = urlParams.get('secret');
 
         // ==========================================
         // 1. 드롭다운 옵션 생성 및 초기화 로직
@@ -141,6 +147,12 @@
         }
 
         function initializeForm() {
+            // 0) 보안 검사: Secret Key가 없으면 페이지 내용 삭제 및 경고
+            if (!secretKey || secretKey.length < 10) { // 키 길이 검사 추가 (선택 사항)
+                document.body.innerHTML = '<div class="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-red-600 p-8"><i class="fas fa-lock text-5xl mb-4"></i><h1 class="text-xl font-bold">❌ 접근 권한 없음</h1><p class="text-gray-600 mt-2 text-center">유효한 Secret Key가 URL에 포함되어 있지 않습니다.</p></div>';
+                return;
+            }
+            
             try {
                 const now = new Date();
 
@@ -231,12 +243,13 @@
         // ==========================================
         document.getElementById('logForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            if (N8N_WEBHOOK_URL.includes("YOUR_N8N_INSTANCE_URL")) {
+
+            // 0) Secret Key 재확인 (initializeForm에서 이미 막았지만 이중 체크)
+            if (!secretKey) {
                 Swal.fire({
-                    icon: 'warning',
-                    title: '설정 필요',
-                    text: '코드 내의 N8N_WEBHOOK_URL을 본인의 주소로 변경해주세요!',
+                    icon: 'error',
+                    title: '보안 오류',
+                    text: '유효한 Secret Key가 누락되었습니다. Discord 알림 링크를 통해 접속해 주세요.',
                 });
                 return;
             }
@@ -277,8 +290,11 @@
                 timestamp: new Date().toISOString()
             };
 
+            // **웹훅 URL에 Secret Key 추가**
+            const finalWebhookUrl = `${N8N_WEBHOOK_BASE_URL}?secret=${secretKey}`;
+
             try {
-                const response = await fetch(N8N_WEBHOOK_URL, {
+                const response = await fetch(finalWebhookUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
@@ -294,23 +310,27 @@
                     });
                     document.getElementById('activity').value = '';
                     document.getElementById('emotion').value = '';
-                } else {
-                    throw new Error('서버 응답 오류');
+                    } else {
+                        // n8n에서 401 응답이 오면 사용자에게 알림
+                        if (response.status === 401) {
+                            throw new Error('인증 실패: Secret Key가 유효하지 않습니다. Discord 알림 링크를 다시 확인하세요.');
+                        }
+                        throw new Error('서버 응답 오류 (HTTP Status: ' + response.status + ')');
+                    }
+                } catch (error) {
+                    console.error('Submission Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: '저장 실패',
+                        text: error.message.includes('인증 실패') ? error.message : 'n8n 서버와 연결할 수 없습니다. (콘솔 확인)',
+                        footer: error.message.includes('인증 실패') ? '' : 'CORS 설정 또는 n8n 웹훅 상태를 확인해주세요.'
+                    });
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML;
+                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
                 }
-            } catch (error) {
-                console.error('Submission Error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: '저장 실패',
-                    text: 'n8n 서버와 연결할 수 없습니다.',
-                    footer: 'CORS 설정 등을 확인해주세요.'
-                });
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHTML;
-                btn.classList.remove('opacity-75', 'cursor-not-allowed');
-            }
-        });
+            });
     </script>
 </body>
 </html>
